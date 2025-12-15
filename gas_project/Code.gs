@@ -5,13 +5,28 @@
 
 // CONFIGURATION - UPDATE THESE
 const CONFIG = {
-  OPENROUTER_API_KEY: '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',
+  // API key stored securely in Script Properties (see setup instructions below)
+  OPENROUTER_API_KEY: PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY'),
   INPUT_FOLDER_ID: '1o8b_1_0ak-MAI2fM38wWIAlARZYcgMaG',
   OUTPUT_FOLDER_ID: '1AfMTWGH30UoaB5xSf5aRsp07xVHrKYXn',
   MODEL: 'anthropic/claude-sonnet-4',
+  IMAGE_MODEL: 'black-forest-labs/flux.2-pro',
+  GENERATE_IMAGES: true,
+  IMAGE_SIZE: 2048,
   SITE_URL: 'https://crazywisdom.com',
   SITE_NAME: 'Crazy Wisdom Podcast'
 };
+
+// ===========================================
+// SETUP FUNCTION - RUN ONCE TO STORE API KEY
+// ===========================================
+// After deploying this script, run this function ONCE to securely store your API key
+// Then delete or comment out this function
+function setupAPIKey() {
+  const apiKey = 'PASTE_YOUR_NEW_API_KEY_HERE';
+  PropertiesService.getScriptProperties().setProperty('OPENROUTER_API_KEY', apiKey);
+  Logger.log('API key stored securely in Script Properties');
+}
 
 // ===========================================
 // MAIN TRIGGER FUNCTION
