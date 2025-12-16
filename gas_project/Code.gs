@@ -466,7 +466,9 @@ function callOpenRouterImageAPI(prompt) {
 
   // Extract base64 image data from response
   if (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.images) {
-    const imageUrl = json.choices[0].message.images[0].url; // data:image/png;base64,...
+    const image = json.choices[0].message.images[0];
+    // The structure is: image.image_url.url (not just image.url)
+    const imageUrl = image.image_url ? image.image_url.url : image.url;
     if (!imageUrl) {
       throw new Error('Image URL is undefined in API response');
     }
