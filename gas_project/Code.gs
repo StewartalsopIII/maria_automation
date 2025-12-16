@@ -461,18 +461,38 @@ function callOpenRouterImageAPI(prompt) {
     throw new Error('OpenRouter Image API error: ' + json.error.message);
   }
 
+  // Log the full response to debug
+  Logger.log('Image API Response: ' + JSON.stringify(json).substring(0, 500));
+
   // Extract base64 image data from response
   if (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.images) {
     const imageUrl = json.choices[0].message.images[0].url; // data:image/png;base64,...
+    if (!imageUrl) {
+      throw new Error('Image URL is undefined in API response');
+    }
     return imageUrl;
   }
 
-  throw new Error('No image data in API response');
+  throw new Error('No image data in API response. Response: ' + JSON.stringify(json).substring(0, 200));
 }
 
 function saveImageToDrive(base64DataUrl, folder, filename) {
+  if (!base64DataUrl) {
+    throw new Error('base64DataUrl is null or undefined');
+  }
+
+  Logger.log('base64DataUrl format: ' + base64DataUrl.substring(0, 50) + '...');
+
   // Extract base64 data from data URL (format: data:image/png;base64,XXXXX)
+  if (!base64DataUrl.includes(',')) {
+    throw new Error('Invalid base64DataUrl format - no comma found. Value: ' + base64DataUrl.substring(0, 100));
+  }
+
   const base64Data = base64DataUrl.split(',')[1];
+
+  if (!base64Data) {
+    throw new Error('base64Data is empty after split');
+  }
 
   // Decode base64 to blob
   const decodedData = Utilities.base64Decode(base64Data);
