@@ -53,10 +53,13 @@ function processNewTranscripts() {
       
       const guestFolder = createOutputFolders(metadata.showType, metadata.guestName);
       const showNotes = generateAllShowNotes(transcript, metadata);
-      
+
       createShowNotesDocs(guestFolder, showNotes, metadata);
       createMasterDoc(guestFolder, showNotes, metadata);
-      
+
+      // Generate episode artwork for Stewart Squared episodes
+      generateEpisodeArtwork(transcript, metadata, showNotes, guestFolder);
+
       file.setName('[PROCESSED] ' + fileName);
       Logger.log('Successfully processed: ' + fileName);
       
@@ -133,7 +136,7 @@ function createOutputFolders(showType, guestName) {
 
 function generateAllShowNotes(transcript, metadata) {
   const showNotes = {};
-  
+
   showNotes.titles = generateTitles(transcript, metadata);
   showNotes.timestamps = generateTimestamps(transcript, metadata);
   showNotes.keyInsights = generateKeyInsights(transcript, metadata);
@@ -141,8 +144,8 @@ function generateAllShowNotes(transcript, metadata) {
   showNotes.hashtags = generateHashtags(transcript, metadata);
   showNotes.keywords = generateKeywords(transcript, metadata);
   showNotes.clips = generateClipSuggestions(transcript, metadata);
-  showNotes.socialPosts = generateSocialPosts(transcript, metadata, showNotes.hashtags);
-  
+  showNotes.socialPosts = generateSocialPosts(transcript, metadata, showNotes.hashtags, showNotes.clips);
+
   return showNotes;
 }
 
@@ -236,21 +239,55 @@ ${transcript}`;
   return callOpenRouter(prompt, 4000);
 }
 
-function generateSocialPosts(transcript, metadata, hashtags) {
-  const prompt = `Write a short social media post (under 120 words) promoting this podcast episode. Use this format:
-- Start with an engaging rhetorical question that ties into one of the episode's central themes
-- Add a one-two sentence description of the conversation, highlighting the journey or tension explored
+function generateSocialPosts(transcript, metadata, hashtags, clips) {
+  const prompt = `Based on the clip suggestions below, write THREE separate social media posts promoting this podcast episode. Each post should be based on a different clip.
+
+For each post (under 120 words each):
+- Start with an engaging rhetorical question that ties into the clip's theme
+- Add a one-two sentence description highlighting the insight or tension from that specific clip
 - Close with the listener takeaway
 
 Keep the tone curious, thought-provoking, and designed for an audience of tech-savvy, open-minded knowledge workers. Make it conversational, handwritten style, like it's written in first person as if the guest is speaking. Don't use the symbol "-" in the text.
 
+Format your response as:
+
+POST 1:
+[First social media post based on first clip]
+
+POST 2:
+[Second social media post based on second clip]
+
+POST 3:
+[Third social media post based on third clip]
+
 Guest: ${metadata.guestName}
 Keywords/Hashtags: ${hashtags}
 
-Transcript:
-${transcript}`;
+Clip Suggestions:
+${clips}`;
 
-  return callOpenRouter(prompt, 1000);
+  return callOpenRouter(prompt, 2000);
+}
+
+// ===========================================
+// YOUTUBE SHOW NOTES (5000 CHAR LIMIT)
+// ===========================================
+
+function generateYouTubeShowNotes(showNotes, metadata) {
+  // Concatenate intro + timestamps + key insights
+  let youtubeNotes = showNotes.intro + '\n\n';
+  youtubeNotes += 'Timestamps\n' + showNotes.timestamps + '\n\n';
+  youtubeNotes += 'Key Insights\n' + showNotes.keyInsights;
+
+  // Check if under 5000 characters
+  if (youtubeNotes.length > 5000) {
+    Logger.log('Warning: YouTube notes exceed 5000 chars (' + youtubeNotes.length + '). Truncating...');
+    // Truncate from the end, keeping intro and timestamps intact
+    youtubeNotes = youtubeNotes.substring(0, 4950) + '...\n\n[Truncated for YouTube limit]';
+  }
+
+  Logger.log('YouTube show notes length: ' + youtubeNotes.length + ' chars');
+  return youtubeNotes;
 }
 
 // ===========================================
@@ -265,7 +302,11 @@ function createShowNotesDocs(folder, showNotes, metadata) {
   createDoc(folder, 'hashtags', 'Hashtags', showNotes.hashtags);
   createDoc(folder, 'keywords', 'Keywords', showNotes.keywords);
   createDoc(folder, 'clip-suggestions', 'Clip Suggestions', showNotes.clips);
-  createDoc(folder, 'social-posts', 'Social Media Posts', showNotes.socialPosts);
+  createDoc(folder, 'social-posts', 'Social Media Posts (3 posts)', showNotes.socialPosts);
+
+  // Create YouTube-formatted show notes
+  const youtubeNotes = generateYouTubeShowNotes(showNotes, metadata);
+  createDoc(folder, 'youtube-show-notes', 'YouTube Show Notes (Under 5000 chars)', youtubeNotes);
 }
 
 function createDoc(folder, slug, title, content) {
@@ -372,6 +413,104 @@ function callOpenRouter(prompt, maxTokens) {
   }
   
   return json.choices[0].message.content;
+}
+
+// ===========================================
+// IMAGE GENERATION (STEWART SQUARED ONLY)
+// ===========================================
+
+function generateImagePrompt(transcript, metadata, showNotes) {
+  // Use keywords and main topics from the episode to create a dynamic prompt
+  const topics = showNotes.keywords.substring(0, 200); // First 200 chars of keywords
+
+  const prompt = `Stewart Squared podcast episode artwork. Modern, vibrant tech-themed abstract illustration featuring themes of ${topics}. Colorful, bold, AI/technology aesthetic with futuristic elements. Professional podcast thumbnail design with dynamic composition. Eye-catching, high-contrast colors. No text or words in the image.`;
+
+  return prompt;
+}
+
+function callOpenRouterImageAPI(prompt) {
+  const url = 'https://openrouter.ai/api/v1/chat/completions';
+
+  const payload = {
+    model: CONFIG.IMAGE_MODEL,
+    messages: [
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    modalities: ['image', 'text']
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'Authorization': 'Bearer ' + CONFIG.OPENROUTER_API_KEY,
+      'HTTP-Referer': CONFIG.SITE_URL,
+      'X-Title': CONFIG.SITE_NAME
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  const json = JSON.parse(response.getContentText());
+
+  if (json.error) {
+    throw new Error('OpenRouter Image API error: ' + json.error.message);
+  }
+
+  // Extract base64 image data from response
+  if (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.images) {
+    const imageUrl = json.choices[0].message.images[0].url; // data:image/png;base64,...
+    return imageUrl;
+  }
+
+  throw new Error('No image data in API response');
+}
+
+function saveImageToDrive(base64DataUrl, folder, filename) {
+  // Extract base64 data from data URL (format: data:image/png;base64,XXXXX)
+  const base64Data = base64DataUrl.split(',')[1];
+
+  // Decode base64 to blob
+  const decodedData = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(decodedData, 'image/png', filename);
+
+  // Create file in folder
+  const file = folder.createFile(blob);
+  Logger.log('Image saved: ' + filename + ' (' + Math.round(blob.getBytes().length / 1024) + ' KB)');
+
+  return file;
+}
+
+function generateEpisodeArtwork(transcript, metadata, showNotes, folder) {
+  if (!CONFIG.GENERATE_IMAGES) {
+    Logger.log('Image generation disabled in CONFIG');
+    return null;
+  }
+
+  if (metadata.showType !== 'stewart-squared') {
+    Logger.log('Skipping image generation (not Stewart Squared episode)');
+    return null;
+  }
+
+  try {
+    Logger.log('Generating episode artwork for Stewart Squared...');
+    const imagePrompt = generateImagePrompt(transcript, metadata, showNotes);
+    Logger.log('Image prompt: ' + imagePrompt);
+
+    const base64DataUrl = callOpenRouterImageAPI(imagePrompt);
+    const imageFile = saveImageToDrive(base64DataUrl, folder, 'episode-artwork.png');
+
+    Logger.log('Episode artwork generated successfully');
+    return imageFile;
+  } catch (error) {
+    Logger.log('Error generating artwork: ' + error.message);
+    // Don't throw - just log and continue without image
+    return null;
+  }
 }
 
 // ===========================================
