@@ -145,6 +145,7 @@ function generateAllShowNotes(transcript, metadata) {
   showNotes.keywords = generateKeywords(transcript, metadata);
   showNotes.clips = generateClipSuggestions(transcript, metadata);
   showNotes.socialPosts = generateSocialPosts(transcript, metadata, showNotes.hashtags, showNotes.clips);
+  showNotes.links = generateLinks(transcript, metadata);
 
   return showNotes;
 }
@@ -269,6 +270,52 @@ ${clips}`;
   return callOpenRouter(prompt, 2000);
 }
 
+/**
+ * Extract links and books from transcript
+ * @param {string} transcript - The podcast transcript
+ * @param {object} metadata - Guest name and show type
+ * @returns {string} JSON string with links and books
+ */
+function generateLinks(transcript, metadata) {
+  const prompt = `Extract URLs and books mentioned in this podcast transcript.
+
+Return ONLY valid JSON with this structure:
+{
+  "links": [
+    {"title": "Descriptive Title", "url": "https://example.com"}
+  ],
+  "books": [
+    {"title": "Book Title", "author": "Author Name"}
+  ]
+}
+
+Rules:
+- Include only explicitly mentioned resources
+- For partial URLs like "example dot com", format as: example.com
+- For books without authors, use "Unknown Author"
+- Empty arrays if category not present
+- Add https:// if protocol missing
+
+Transcript:
+${transcript}`;
+
+  try {
+    const response = callOpenRouter(prompt, 2000);
+    const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    // Basic validation
+    if (!Array.isArray(parsed.links) || !Array.isArray(parsed.books)) {
+      throw new Error('Invalid structure');
+    }
+
+    return cleaned;
+  } catch (error) {
+    Logger.log('Links extraction failed: ' + error.message);
+    return JSON.stringify({links: [], books: []});
+  }
+}
+
 // ===========================================
 // YOUTUBE SHOW NOTES (5000 CHAR LIMIT)
 // ===========================================
@@ -307,6 +354,19 @@ function createShowNotesDocs(folder, showNotes, metadata) {
   // Create YouTube-formatted show notes
   const youtubeNotes = generateYouTubeShowNotes(showNotes, metadata);
   createDoc(folder, 'youtube-show-notes', 'YouTube Show Notes (Under 5000 chars)', youtubeNotes);
+
+  // Create standalone links document if we have links
+  if (showNotes.links) {
+    try {
+      const linksData = JSON.parse(showNotes.links);
+      if (linksData.links.length > 0 || linksData.books.length > 0) {
+        const linksText = formatLinksForStandalone(showNotes.links);
+        createDoc(folder, 'links', 'Links & Resources', linksText);
+      }
+    } catch (error) {
+      Logger.log('Skipping standalone links doc: ' + error.message);
+    }
+  }
 }
 
 function createDoc(folder, slug, title, content) {
@@ -410,12 +470,115 @@ function createMasterDoc(folder, showNotes, metadata) {
   body.appendParagraph('SOCIAL MEDIA POSTS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.socialPosts);
-  
+
+  // Add links section if present
+  if (showNotes.links) {
+    addLinksSection(body, showNotes.links);
+  }
+
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
   file.moveTo(folder);
-  
+
   return doc;
+}
+
+/**
+ * Add formatted links section to document body
+ * @param {object} body - Document body element
+ * @param {string} linksJson - JSON string with links and books
+ */
+function addLinksSection(body, linksJson) {
+  let data;
+  try {
+    data = JSON.parse(linksJson);
+  } catch (error) {
+    Logger.log('Failed to parse links for display');
+    return;
+  }
+
+  // Skip if no content
+  if (data.links.length === 0 && data.books.length === 0) {
+    return;
+  }
+
+  // Main heading
+  body.appendParagraph('LINKS & RESOURCES')
+    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+
+  // Links section
+  if (data.links.length > 0) {
+    body.appendParagraph('Websites & Articles')
+      .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    data.links.forEach(item => {
+      const para = body.appendParagraph('');
+      const text = para.editAsText();
+
+      text.appendText('• ');
+      const start = text.getText().length;
+      text.appendText(item.title);
+      const end = text.getText().length - 1;
+
+      // Add https:// if missing
+      const url = item.url.startsWith('http') ? item.url : 'https://' + item.url;
+      text.setLinkUrl(start, end, url);
+      text.setBold(start, end, true);
+
+      text.setFontSize(9);
+      para.setSpacingAfter(3);
+    });
+
+    body.appendParagraph('').setSpacingAfter(8);
+  }
+
+  // Books section
+  if (data.books.length > 0) {
+    body.appendParagraph('Books')
+      .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    data.books.forEach(item => {
+      const para = body.appendParagraph('');
+      const text = para.editAsText();
+
+      text.appendText('• "');
+      const titleStart = text.getText().length;
+      text.appendText(item.title);
+      const titleEnd = text.getText().length - 1;
+      text.setItalic(titleStart, titleEnd, true);
+
+      text.appendText('" by ' + (item.author || 'Unknown Author'));
+
+      text.setFontSize(9);
+      para.setSpacingAfter(3);
+    });
+  }
+}
+
+/**
+ * Helper for formatting links in standalone document
+ * @param {string} linksJson - JSON string with links and books
+ * @returns {string} Formatted text for standalone document
+ */
+function formatLinksForStandalone(linksJson) {
+  const data = JSON.parse(linksJson);
+  let text = '';
+
+  if (data.links.length > 0) {
+    text += 'WEBSITES & ARTICLES\n\n';
+    data.links.forEach(item => {
+      text += `• ${item.title}\n  ${item.url}\n\n`;
+    });
+  }
+
+  if (data.books.length > 0) {
+    text += 'BOOKS\n\n';
+    data.books.forEach(item => {
+      text += `• "${item.title}" by ${item.author || 'Unknown Author'}\n\n`;
+    });
+  }
+
+  return text;
 }
 
 // ===========================================
