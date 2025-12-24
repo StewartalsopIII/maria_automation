@@ -76,7 +76,7 @@ function processNewTranscripts() {
 
 function extractMetadata(transcript) {
   const prompt = `Analyze this podcast transcript and extract:
-1. The guest's full name (not Stewart Alsop - he's the host)
+1. The guest's full name (not Stewart Alsop III - he's the host. IMPORTANT: Host name is spelled "Stewart" with "ew", not "Stuart")
 2. Whether this is "Crazy Wisdom" or "Stewart Squared" podcast
 
 Rules:
@@ -181,7 +181,7 @@ ${transcript}`;
 }
 
 function generateIntro(transcript, metadata) {
-  const prompt = `Give me an intro to the topics discussed mentioning the host Stewart Alsop and the guest's full name ${metadata.guestName}. Also add any links to show notes that were mentioned for the guest. Make it only one paragraph and avoid using the word "delve" or sounding like ChatGPT.
+  const prompt = `Give me an intro to the topics discussed mentioning the host Stewart Alsop (spelled Stewart with "ew", not Stuart) and the guest's full name ${metadata.guestName}. Also add any links to show notes that were mentioned for the guest. Make it only one paragraph and avoid using the word "delve" or sounding like ChatGPT.
 
 Transcript:
 ${transcript}`;
@@ -346,11 +346,54 @@ function createMasterDoc(folder, showNotes, metadata) {
   
   body.appendParagraph('TIMESTAMPS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.timestamps);
+
+  const tsPara = body.appendParagraph(showNotes.timestamps);
+  const tsText = tsPara.editAsText();
+
+  // Set entire section to 9pt
+  tsText.setFontSize(9);
+
+  // Bold timestamp values (00:00 or 00:00:00 at line starts)
+  const tsString = tsText.getText();
+  const tsPattern = /^(\d{1,2}:\d{2}(?::\d{2})?)/gm;
+  let match;
+
+  while ((match = tsPattern.exec(tsString)) !== null) {
+    tsText.setBold(match.index, match.index + match[1].length - 1, true);
+  }
   
   body.appendParagraph('KEY INSIGHTS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.keyInsights);
+
+  const kiPara = body.appendParagraph(showNotes.keyInsights);
+  const kiText = kiPara.editAsText();
+
+  // Set entire section to 9pt
+  kiText.setFontSize(9);
+
+  // Convert **bold** to actual bold formatting
+  const kiString = kiText.getText();
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  const replacements = [];
+
+  while ((match = boldPattern.exec(kiString)) !== null) {
+    replacements.push({
+      start: match.index,
+      end: match.index + match[0].length - 1
+    });
+  }
+
+  // Process in reverse order to maintain offsets
+  for (let i = replacements.length - 1; i >= 0; i--) {
+    const r = replacements[i];
+
+    // Apply bold to content (excluding the **)
+    kiText.setBold(r.start + 2, r.end - 2, true);
+
+    // Remove ** markers
+    kiText.deleteText(r.end - 1, r.end);       // Remove trailing **
+    kiText.deleteText(r.start, r.start + 1);   // Remove leading **
+  }
   
   body.appendParagraph('KEYWORDS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
@@ -461,18 +504,40 @@ function callOpenRouterImageAPI(prompt) {
     throw new Error('OpenRouter Image API error: ' + json.error.message);
   }
 
+  // Log the full response to debug
+  Logger.log('Image API Response: ' + JSON.stringify(json).substring(0, 500));
+
   // Extract base64 image data from response
   if (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.images) {
-    const imageUrl = json.choices[0].message.images[0].url; // data:image/png;base64,...
+    const image = json.choices[0].message.images[0];
+    // The structure is: image.image_url.url (not just image.url)
+    const imageUrl = image.image_url ? image.image_url.url : image.url;
+    if (!imageUrl) {
+      throw new Error('Image URL is undefined in API response');
+    }
     return imageUrl;
   }
 
-  throw new Error('No image data in API response');
+  throw new Error('No image data in API response. Response: ' + JSON.stringify(json).substring(0, 200));
 }
 
 function saveImageToDrive(base64DataUrl, folder, filename) {
+  if (!base64DataUrl) {
+    throw new Error('base64DataUrl is null or undefined');
+  }
+
+  Logger.log('base64DataUrl format: ' + base64DataUrl.substring(0, 50) + '...');
+
   // Extract base64 data from data URL (format: data:image/png;base64,XXXXX)
+  if (!base64DataUrl.includes(',')) {
+    throw new Error('Invalid base64DataUrl format - no comma found. Value: ' + base64DataUrl.substring(0, 100));
+  }
+
   const base64Data = base64DataUrl.split(',')[1];
+
+  if (!base64Data) {
+    throw new Error('base64Data is empty after split');
+  }
 
   // Decode base64 to blob
   const decodedData = Utilities.base64Decode(base64Data);
