@@ -334,8 +334,9 @@ function generateYouTubeShowNotes(showNotes, metadata) {
   youtubeNotes += 'Timestamps\n';
   youtubeNotes += '[MARIA: Paste Riverside chapter timestamps here]\n\n';
 
-  // Use shorter YouTube-optimized insights
-  youtubeNotes += 'Key Insights\n' + showNotes.keyInsightsYouTube;
+  // Use shorter YouTube-optimized insights (remove markdown bold markers)
+  const cleanedInsights = showNotes.keyInsightsYouTube.replace(/\*\*/g, '');
+  youtubeNotes += 'Key Insights\n' + cleanedInsights;
 
   // Check if under 5000 characters (should be ~2800)
   if (youtubeNotes.length > 5000) {
