@@ -140,6 +140,7 @@ function generateAllShowNotes(transcript, metadata) {
   showNotes.titles = generateTitles(transcript, metadata);
   showNotes.timestamps = generateTimestamps(transcript, metadata);
   showNotes.keyInsights = generateKeyInsights(transcript, metadata);
+  showNotes.keyInsightsYouTube = generateKeyInsights(transcript, metadata, 'youtube');
   showNotes.intro = generateIntro(transcript, metadata);
   showNotes.hashtags = generateHashtags(transcript, metadata);
   showNotes.keywords = generateKeywords(transcript, metadata);
@@ -170,15 +171,20 @@ ${transcript}`;
   return callOpenRouter(prompt, 1500);
 }
 
-function generateKeyInsights(transcript, metadata) {
-  const prompt = `Give me 7 key insights from this episode in a numbered list in full paragraph form. Maximum 2200 characters.
+function generateKeyInsights(transcript, metadata, variant = 'default') {
+  const prompts = {
+    default: `Give me 7 key insights from this episode in a numbered list in full paragraph form. Maximum 2200 characters.`,
+    youtube: `Give me 7 key insights from this episode in a numbered list. Keep each insight SHORT (200-250 characters, 1-2 sentences). Focus on core takeaways only.`
+  };
+
+  const prompt = `${prompts[variant]}
 
 Guest: ${metadata.guestName}
 
 Transcript:
 ${transcript}`;
 
-  return callOpenRouter(prompt, 2500);
+  return callOpenRouter(prompt, variant === 'youtube' ? 2000 : 2500);
 }
 
 function generateIntro(transcript, metadata) {
@@ -321,15 +327,20 @@ ${transcript}`;
 // ===========================================
 
 function generateYouTubeShowNotes(showNotes, metadata) {
-  // Concatenate intro + timestamps + key insights
+  // Concatenate intro + placeholder for Riverside timestamps + shorter key insights
   let youtubeNotes = showNotes.intro + '\n\n';
-  youtubeNotes += 'Timestamps\n' + showNotes.timestamps + '\n\n';
-  youtubeNotes += 'Key Insights\n' + showNotes.keyInsights;
 
-  // Check if under 5000 characters
+  // Placeholder for Maria to paste Riverside chapter timestamps
+  youtubeNotes += 'Timestamps\n';
+  youtubeNotes += '[MARIA: Paste Riverside chapter timestamps here]\n\n';
+
+  // Use shorter YouTube-optimized insights (remove markdown bold markers)
+  const cleanedInsights = showNotes.keyInsightsYouTube.replace(/\*\*/g, '');
+  youtubeNotes += 'Key Insights\n' + cleanedInsights;
+
+  // Check if under 5000 characters (should be ~2800)
   if (youtubeNotes.length > 5000) {
-    Logger.log('Warning: YouTube notes exceed 5000 chars (' + youtubeNotes.length + '). Truncating...');
-    // Truncate from the end, keeping intro and timestamps intact
+    Logger.log('Warning: YouTube notes exceed 5000 chars (' + youtubeNotes.length + '). This should not happen.');
     youtubeNotes = youtubeNotes.substring(0, 4950) + '...\n\n[Truncated for YouTube limit]';
   }
 
