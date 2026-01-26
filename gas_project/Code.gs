@@ -146,6 +146,7 @@ function generateAllShowNotes(transcript, metadata) {
   showNotes.keywords = generateKeywords(transcript, metadata);
   showNotes.clips = generateClipSuggestions(transcript, metadata);
   showNotes.socialPosts = generateSocialPosts(transcript, metadata, showNotes.hashtags, showNotes.clips);
+  showNotes.ctas = generateCTAs(transcript, metadata, showNotes.clips);
   showNotes.links = generateLinks(transcript, metadata);
 
   return showNotes;
@@ -247,7 +248,7 @@ ${transcript}`;
 }
 
 function generateSocialPosts(transcript, metadata, hashtags, clips) {
-  const prompt = `Based on the clip suggestions below, write THREE separate social media posts promoting this podcast episode. Each post should be based on a different clip.
+  const prompt = `Based on the clip suggestions below, write ONE social media post for EACH clip. There should be 5-7 posts total (one per clip).
 
 For each post (under 120 words each):
 - Start with an engaging rhetorical question that ties into the clip's theme
@@ -258,14 +259,16 @@ Keep the tone curious, thought-provoking, and designed for an audience of tech-s
 
 Format your response as:
 
-POST 1:
-[First social media post based on first clip]
+POST 1 (for Clip 1):
+[Social media post for first clip]
 
-POST 2:
-[Second social media post based on second clip]
+POST 2 (for Clip 2):
+[Social media post for second clip]
 
-POST 3:
-[Third social media post based on third clip]
+POST 3 (for Clip 3):
+[Social media post for third clip]
+
+[Continue for all clips...]
 
 Guest: ${metadata.guestName}
 Keywords/Hashtags: ${hashtags}
@@ -273,7 +276,7 @@ Keywords/Hashtags: ${hashtags}
 Clip Suggestions:
 ${clips}`;
 
-  return callOpenRouter(prompt, 2000);
+  return callOpenRouter(prompt, 4000);
 }
 
 /**
@@ -322,6 +325,53 @@ ${transcript}`;
   }
 }
 
+/**
+ * Generate call-to-actions (CTAs) for each clip
+ * @param {string} transcript - The full podcast transcript
+ * @param {object} metadata - Guest name and show type
+ * @param {string} clips - The generated clip suggestions
+ * @returns {string} CTAs for each clip
+ */
+function generateCTAs(transcript, metadata, clips) {
+  // Determine show name for CTA
+  const showName = metadata.showType === 'stewart-squared' ? 'Stewart Squared' : 'Crazy Wisdom';
+
+  const prompt = `For each clip suggestion below, write a compelling Call-to-Action (CTA) that creates intrigue and makes viewers want to hear more of the full episode.
+
+Guidelines:
+- Each CTA should generate curiosity about what comes next in the conversation
+- Reference specific topics the guest discusses later in the episode (use the full transcript)
+- Include a question or mention to the audience about wanting to know more
+- End with: "Subscribe to ${showName} on Spotify and YouTube" (vary the exact wording)
+- Keep each CTA to 2-3 sentences max
+
+Example CTAs:
+- "Want to find out where Garrett believes America sits in the ancient cycle of power and what might be coming next? Subscribe to ${showName} on Spotify and YouTube and hear the full episode."
+- "Catch the rest on ${showName}, as we break down the early signs of who's set to dominate the next decade of AI. And make sure to subscribe on Spotify and YouTube for more episodes like this."
+- "Want to find out who Garrett thinks is the modern master of gathering power? Subscribe to ${showName} on Spotify and YouTube to catch the rest of this conversation and listen to more episodes like this."
+
+Format your response as:
+
+CTA 1 (for Clip 1):
+[Call to action for first clip]
+
+CTA 2 (for Clip 2):
+[Call to action for second clip]
+
+[Continue for all clips...]
+
+Guest: ${metadata.guestName}
+Show: ${showName}
+
+Clip Suggestions:
+${clips}
+
+Full Transcript (for context on what comes later):
+${transcript.substring(0, 15000)}`;
+
+  return callOpenRouter(prompt, 3000);
+}
+
 // ===========================================
 // YOUTUBE SHOW NOTES (5000 CHAR LIMIT)
 // ===========================================
@@ -360,7 +410,8 @@ function createShowNotesDocs(folder, showNotes, metadata) {
   createDoc(folder, 'hashtags', 'Hashtags', showNotes.hashtags);
   createDoc(folder, 'keywords', 'Keywords', showNotes.keywords);
   createDoc(folder, 'clip-suggestions', 'Clip Suggestions', showNotes.clips);
-  createDoc(folder, 'social-posts', 'Social Media Posts (3 posts)', showNotes.socialPosts);
+  createDoc(folder, 'social-posts', 'Social Media Posts (1 per clip)', showNotes.socialPosts);
+  createDoc(folder, 'ctas', 'Call-to-Actions (1 per clip)', showNotes.ctas);
 
   // Create YouTube-formatted show notes
   const youtubeNotes = generateYouTubeShowNotes(showNotes, metadata);
@@ -399,22 +450,22 @@ function createDoc(folder, slug, title, content) {
 function createMasterDoc(folder, showNotes, metadata) {
   const doc = DocumentApp.create('MASTER - ' + metadata.guestName);
   const body = doc.getBody();
-  
+
   body.appendParagraph(metadata.guestName + ' - Show Notes')
     .setHeading(DocumentApp.ParagraphHeading.TITLE);
-  
+
   body.appendParagraph('Show: ' + metadata.showType);
   body.appendParagraph('Generated: ' + new Date().toISOString());
   body.appendHorizontalRule();
-  
+
+  body.appendParagraph('KEYWORDS')
+    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph(showNotes.keywords);
+
   body.appendParagraph('INTRO')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.intro);
-  
-  body.appendParagraph('EPISODE TITLES')
-    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.titles);
-  
+
   body.appendParagraph('TIMESTAMPS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
 
@@ -432,7 +483,7 @@ function createMasterDoc(folder, showNotes, metadata) {
   while ((match = tsPattern.exec(tsString)) !== null) {
     tsText.setBold(match.index, match.index + match[1].length - 1, true);
   }
-  
+
   body.appendParagraph('KEY INSIGHTS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
 
@@ -465,22 +516,26 @@ function createMasterDoc(folder, showNotes, metadata) {
     kiText.deleteText(r.end - 1, r.end);       // Remove trailing **
     kiText.deleteText(r.start, r.start + 1);   // Remove leading **
   }
-  
-  body.appendParagraph('KEYWORDS')
+
+  body.appendParagraph('EPISODE TITLES')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.keywords);
-  
+  body.appendParagraph(showNotes.titles);
+
   body.appendParagraph('HASHTAGS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.hashtags);
-  
+
   body.appendParagraph('CLIP SUGGESTIONS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.clips);
-  
+
   body.appendParagraph('SOCIAL MEDIA POSTS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.socialPosts);
+
+  body.appendParagraph('CALL-TO-ACTIONS')
+    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph(showNotes.ctas);
 
   // Add links section if present
   if (showNotes.links) {
