@@ -9,7 +9,7 @@ const CONFIG = {
   OPENROUTER_API_KEY: PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY'),
   INPUT_FOLDER_ID: '1o8b_1_0ak-MAI2fM38wWIAlARZYcgMaG',
   OUTPUT_FOLDER_ID: '1AfMTWGH30UoaB5xSf5aRsp07xVHrKYXn',
-  MODEL: 'anthropic/claude-sonnet-4',
+  MODEL: 'anthropic/claude-sonnet-4.5',
   IMAGE_MODEL: 'black-forest-labs/flux.2-pro',
   GENERATE_IMAGES: true,
   IMAGE_SIZE: 2048,
@@ -227,14 +227,30 @@ ${transcript}`;
 }
 
 function generateClipSuggestions(transcript, metadata) {
-  const prompt = `Analyze this podcast transcript and find 5-7 engaging clips for social media. Each clip should include:
+  const prompt = `Analyze this podcast transcript and find 5-7 engaging clips for social media.
 
-1. A strong hook (something that makes people stop scrolling) that appeals to the target audience
-2. A suggested title or caption idea for the clip
-3. A timestamp and text excerpt (at least 80 words) from the transcript
-4. A note about why this moment works (e.g., curiosity, emotion, surprising insight)
+IMPORTANT: Use EXACTLY this format for each clip (no intro text, start directly with CLIP 1):
 
-Keep clips between 15–90 seconds long for Instagram Reels/TikTok. Highlight only the most shareable, insightful, impactful, resonating or belief-changing moments.
+CLIP 1: "[Clip Title]"
+Hook: [A strong hook that makes people stop scrolling]
+Caption: [A suggested caption/title for social media]
+Timestamp: [Start time - End time from transcript]
+Text: "[At least 80 words excerpt from the transcript]"
+Why it works: [Brief note on why this moment is engaging]
+
+CLIP 2: "[Clip Title]"
+Hook: [Hook for clip 2]
+Caption: [Caption for clip 2]
+Timestamp: [Timestamp for clip 2]
+Text: "[Text excerpt for clip 2]"
+Why it works: [Why clip 2 works]
+
+[Continue for all 5-7 clips...]
+
+Guidelines:
+- Keep clips between 15–90 seconds long for Instagram Reels/TikTok
+- Highlight only the most shareable, insightful, impactful, or belief-changing moments
+- Start DIRECTLY with "CLIP 1:" - do not include any introduction or preamble
 
 Target audience:
 - Demographics: 25–45 years old, global with strong North America and Europe presence
@@ -447,6 +463,82 @@ function createDoc(folder, slug, title, content) {
   return doc;
 }
 
+// ===========================================
+// CONTENT PARSERS FOR GROUPED CLIP OUTPUT
+// ===========================================
+
+/**
+ * Parse clips text into array of individual clips
+ * Splits on "CLIP N:" pattern and filters out any intro text
+ * @param {string} clipsText - Raw clips text from LLM
+ * @returns {string[]} Array of individual clip contents
+ */
+function parseClips(clipsText) {
+  if (!clipsText) return [];
+
+  // Split on "CLIP N" or "## Clip N" patterns (case insensitive)
+  // This handles both new format "CLIP 1:" and old format "## Clip 1:"
+  let clips = clipsText.split(/(?=(?:##?\s*)?CLIP\s*#?\d)/i);
+
+  // Filter out any entries that don't start with a clip marker (removes intro text)
+  // and clean up whitespace
+  clips = clips
+    .map(clip => clip.trim())
+    .filter(clip => {
+      // Only keep entries that actually start with a CLIP pattern
+      return clip.length > 0 && /^(?:##?\s*)?CLIP\s*#?\d/i.test(clip);
+    });
+
+  // If that didn't find clips, try the numbered "1." pattern as fallback
+  if (clips.length === 0) {
+    clips = clipsText.split(/(?=^\d+\.\s)/m)
+      .map(clip => clip.trim())
+      .filter(clip => clip.length > 0 && /^\d+\.\s/.test(clip));
+  }
+
+  return clips;
+}
+
+/**
+ * Parse social posts text into array of individual posts
+ * Splits on "POST N" pattern, uses index for matching (not labels)
+ * @param {string} postsText - Raw posts text from LLM
+ * @returns {string[]} Array of individual post contents
+ */
+function parsePosts(postsText) {
+  if (!postsText) return [];
+
+  // Split on "POST N" pattern (case insensitive)
+  const posts = postsText.split(/(?=POST\s*\d)/i);
+
+  // Clean up and remove the "POST N (for Clip N):" header from each
+  return posts
+    .map(post => post.replace(/^POST\s*\d+\s*\([^)]*\)\s*:?\s*/i, '').trim())
+    .filter(post => post.length > 0);
+}
+
+/**
+ * Parse CTAs text into array of individual CTAs
+ * Splits on "CTA N" pattern, uses index for matching (not labels)
+ * @param {string} ctasText - Raw CTAs text from LLM
+ * @returns {string[]} Array of individual CTA contents
+ */
+function parseCTAs(ctasText) {
+  if (!ctasText) return [];
+
+  // Split on "CTA N" pattern (case insensitive)
+  const ctas = ctasText.split(/(?=CTA\s*\d)/i);
+
+  // Clean up and remove the "CTA N (for Clip N):" header from each
+  return ctas
+    .map(cta => cta.replace(/^CTA\s*\d+\s*\([^)]*\)\s*:?\s*/i, '').trim())
+    .filter(cta => cta.length > 0);
+}
+
+// ===========================================
+// DOCUMENT CREATION
+// ===========================================
+
 function createMasterDoc(folder, showNotes, metadata) {
   const doc = DocumentApp.create('MASTER - ' + metadata.guestName);
   const body = doc.getBody();
@@ -525,17 +617,50 @@ function createMasterDoc(folder, showNotes, metadata) {
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph(showNotes.hashtags);
 
+  // Parse content into arrays for grouped output
+  const clips = parseClips(showNotes.clips);
+  const posts = parsePosts(showNotes.socialPosts);
+  const ctas = parseCTAs(showNotes.ctas);
+
+  // Main section heading
   body.appendParagraph('CLIP SUGGESTIONS')
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.clips);
 
-  body.appendParagraph('SOCIAL MEDIA POSTS')
-    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.socialPosts);
+  // Write each clip grouped with its corresponding post and CTA
+  for (let i = 0; i < clips.length; i++) {
+    // Extract clip title from content (format: 'CLIP N: "Title"' or '## Clip N: "Title"')
+    const clipContent = clips[i];
+    const titleMatch = clipContent.match(/^(?:##?\s*)?CLIP\s*#?\d+\s*:\s*"?([^"\n]+)"?/i);
+    const clipTitle = titleMatch ? titleMatch[1].replace(/"/g, '').trim() : '';
 
-  body.appendParagraph('CALL-TO-ACTIONS')
-    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph(showNotes.ctas);
+    // Create heading with clip number and title
+    const headingText = clipTitle ? 'Clip #' + (i + 1) + ': ' + clipTitle : 'Clip #' + (i + 1);
+    body.appendParagraph(headingText)
+      .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    // Remove the "CLIP N: Title" line from content since it's now in the heading
+    const cleanedContent = clipContent.replace(/^(?:##?\s*)?CLIP\s*#?\d+\s*:\s*"?[^"\n]*"?\s*\n?/i, '').trim();
+    body.appendParagraph(cleanedContent);
+
+    // Corresponding social media post (matched by index)
+    if (posts[i]) {
+      body.appendParagraph('Social Media Post')
+        .setHeading(DocumentApp.ParagraphHeading.HEADING3);
+      body.appendParagraph(posts[i]);
+    }
+
+    // Corresponding call to action (matched by index)
+    if (ctas[i]) {
+      body.appendParagraph('Call to Action')
+        .setHeading(DocumentApp.ParagraphHeading.HEADING3);
+      body.appendParagraph(ctas[i]);
+    }
+
+    // Add separator between clip groups (except after the last one)
+    if (i < clips.length - 1) {
+      body.appendHorizontalRule();
+    }
+  }
 
   // Add links section if present
   if (showNotes.links) {
