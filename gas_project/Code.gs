@@ -66,6 +66,7 @@ function processNewTranscripts() {
     } catch (error) {
       Logger.log('Error processing ' + fileName + ': ' + error.message);
       file.setName('[FAILED] ' + fileName);
+      sendErrorEmail(fileName, error);
     }
   }
 }
@@ -927,8 +928,28 @@ function generateEpisodeArtwork(transcript, metadata, showNotes, folder) {
     return imageFile;
   } catch (error) {
     Logger.log('Error generating artwork: ' + error.message);
+    sendErrorEmail('Image generation for ' + metadata.guestName, error);
     // Don't throw - just log and continue without image
     return null;
+  }
+}
+
+// ===========================================
+// ERROR NOTIFICATIONS
+// ===========================================
+
+function sendErrorEmail(context, error) {
+  try {
+    MailApp.sendEmail(
+      'stewartalsopIII@gmail.com',
+      'Maria Automation FAILED: ' + context,
+      'Something went wrong processing: ' + context + '\n\n' +
+      'Error: ' + error.message + '\n\n' +
+      'Stack: ' + (error.stack || 'N/A') + '\n\n' +
+      'Time: ' + new Date().toISOString()
+    );
+  } catch (emailError) {
+    Logger.log('Could not send error email: ' + emailError.message);
   }
 }
 
