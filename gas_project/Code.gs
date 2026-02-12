@@ -836,7 +836,7 @@ function callOpenRouterImageAPI(prompt) {
         content: prompt
       }
     ],
-    modalities: ['image', 'text']
+    modalities: ['image']
   };
 
   const options = {
