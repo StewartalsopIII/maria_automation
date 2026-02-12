@@ -1,6 +1,8 @@
 # Workflow Automation Status
 
-This document is the canonical reference for tracking what's automated, what's manual, and what's planned for automation.
+> Canonical reference for tracking what's automated, what's manual, and what's planned.
+>
+> Back to: [CLAUDE.md](../CLAUDE.md) | [README.md](../README.md) | [ARCHITECTURE.md](../docs/ARCHITECTURE.md) | [KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md)
 
 ---
 

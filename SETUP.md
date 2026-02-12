@@ -1,5 +1,7 @@
 # Maria Automation - Setup Instructions
 
+> Back to: [CLAUDE.md](CLAUDE.md) | [README.md](README.md) | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+
 ## Security Setup (IMPORTANT - Do This First!)
 
 ### 1. Get a New OpenRouter API Key

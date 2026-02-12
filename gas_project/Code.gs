@@ -54,11 +54,11 @@ function processNewTranscripts() {
       const guestFolder = createOutputFolders(metadata.showType, metadata.guestName);
       const showNotes = generateAllShowNotes(transcript, metadata);
 
+      // Generate episode artwork FIRST (before doc creation) to avoid GAS 6-min timeout
+      generateEpisodeArtwork(transcript, metadata, showNotes, guestFolder);
+
       createShowNotesDocs(guestFolder, showNotes, metadata);
       createMasterDoc(guestFolder, showNotes, metadata);
-
-      // Generate episode artwork for Stewart Squared episodes
-      generateEpisodeArtwork(transcript, metadata, showNotes, guestFolder);
 
       file.setName('[PROCESSED] ' + fileName);
       Logger.log('Successfully processed: ' + fileName);

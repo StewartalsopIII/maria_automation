@@ -1,11 +1,13 @@
 # Maria Automation - Quick Reference Guide
 
+> Back to: [CLAUDE.md](CLAUDE.md) | [README.md](README.md) | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+
 ## At a Glance
 
 **What:** Google Apps Script that processes podcast transcripts and generates comprehensive show notes
 **Where:** `/Users/stewartalsop/Dropbox/Crazy Wisdom/Business/Coding_Projects/Sustained Use/maria_automation/`
-**Main File:** `gas_project/Code.gs` (829 lines)
-**Tech:** Google Apps Script + OpenRouter API (Claude Sonnet 4) + Google Drive
+**Main File:** `gas_project/Code.gs` (~950 lines)
+**Tech:** Google Apps Script + OpenRouter API (Claude Sonnet 4.5) + Google Drive
 
 ---
 
@@ -25,7 +27,7 @@ Script ID: 1aIE83HRFFbOj1TbsHB50Z2HzBSLHG1QaVZXTeFBRw-KF68hrbFXe1GC2
 1. User uploads .txt transcript → INPUT_FOLDER_ID
 2. Every 5 minutes: processNewTranscripts() runs
 3. Extract metadata (guest name, show type)
-4. Call AI 8-9 times to generate content
+4. Call AI 12 times to generate content
 5. Create folder: OUTPUT_FOLDER_ID/[ShowType]/[Guest] - [Date]/
 6. Create 10-12 Google Docs
 7. For Stewart Squared: Generate image
@@ -157,7 +159,7 @@ clasp push
 
 ---
 
-## Code Organization (829 lines total)
+## Code Organization (~950 lines total)
 
 | Section | Lines | Purpose |
 |---------|-------|---------|
@@ -274,17 +276,26 @@ git push origin automate-clip-content-creation
 
 ## Documentation Files
 
-| File | Purpose | Length |
-|------|---------|--------|
-| `REPOSITORY_ANALYSIS.md` | Full analysis & conventions | ~1,200 lines |
-| `QUICK_REFERENCE.md` | This file - quick lookup | ~200 lines |
-| `SETUP.md` | Initial setup instructions | ~97 lines |
-| `Blueprints/Workflow_Automation_Status.md` | Automation status reference | ~249 lines |
-| `Blueprints/Enhancement_Plan_Dec2025.md` | Feature specifications | ~440 lines |
-| `RESEARCH_FINDINGS.md` | Formatting patterns & API usage | ~604 lines |
+| File | Purpose | When to Read |
+|------|---------|-------------|
+| [CLAUDE.md](CLAUDE.md) | Claude Code fast-start context | First thing, every session |
+| [README.md](README.md) | Human-readable project overview | Understanding the project |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, function map, data flow | Before modifying Code.gs |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Bugs, debugging, troubleshooting | When something breaks |
+| [SETUP.md](SETUP.md) | Initial setup and API key rotation | First-time setup only |
+| [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | This file - config and common tasks | Quick lookups |
+| [Blueprints/Workflow_Automation_Status.md](Blueprints/Workflow_Automation_Status.md) | What's automated vs manual vs planned | Planning new features |
+
+### Research Archives
+| File | Content |
+|------|---------|
+| [REPOSITORY_ANALYSIS.md](REPOSITORY_ANALYSIS.md) | Full codebase analysis |
+| [CODE_PATTERNS.md](CODE_PATTERNS.md) | Code conventions |
+| [FORMATTING_IMPLEMENTATION_GUIDE.md](FORMATTING_IMPLEMENTATION_GUIDE.md) | Google Docs formatting |
+| [RESEARCH_FINDINGS.md](RESEARCH_FINDINGS.md) | Technical deep-dive |
 
 ---
 
-**Last Updated:** January 20, 2026
+**Last Updated:** February 12, 2026
 **Status:** Active Development
 **Branch:** `automate-clip-content-creation`
